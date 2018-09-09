@@ -1,0 +1,59 @@
+#My First Notebook
+This notebook is basically just me trying to see how this stuff works. So let's see.
+```{r}
+silence<-suppressWarnings
+silence(library(tidyverse))
+silence(library(reshape2))
+silence(library(modelr))
+silence(library(lubridate))
+UAdaily<-flights %>% 
+  filter(carrier=="UA") %>% 
+  mutate(date=make_date(year,month,day)) %>% 
+  select(-year,-month,-day,-time_hour) %>% 
+  group_by(date) %>% 
+  summarise(n=n())
+
+```
+Ok Now Let's Visualise how the distribution of UA fligths throughtout the year.
+```{r}
+ggplot(UAdaily,aes(date,n))+geom_line()
+```
+
+How about we see the daily distribution of flights?
+```{r}
+UAdaily<-UAdaily %>% 
+  mutate(wday=wday(date,label=TRUE)) 
+  ggplot(UAdaily,aes(wday,n))+geom_boxplot()
+```
+
+_The flight distribution seems to be concentrated in week days. Saturday seems to have the lowest number of flights. Let's model and visualise it_
+```{r}
+modUA<-lm(n~wday,data=UAdaily)
+UAgrid<-UAdaily %>% 
+  data_grid(wday) %>% 
+  add_predictions(modUA,"n")
+ggplot(UAdaily,aes(wday,n))+geom_boxplot()+
+  geom_point(data=UAgrid,colour="red",shape=6,size=3)
+summary(modUA)
+```
+Next we add residuals to try and remove our pattern.
+```{r}
+ UAdaily<-UAdaily %>% 
+  add_residuals(modUA,"resid")
+  ggplot(UAdaily,aes(date,resid,color=wday))+geom_ref_line(h=0)+geom_line()+
+    ggtitle("Pattern of flight Distributions")+theme(plot.title = element_text(hjust=0.5))
+```
+Then what next? We see the pattern isn different towards the end of the year. For better visualisation we extract more.
+```{r}
+ggplot(UAdaily,aes(date,resid))+geom_ref_line(h=0)+geom_line(colour="grey45")+
+  geom_smooth(se=FALSE,span=0.20)+ggtitle("Residual Distribution")+theme(plot.title=element_text(hjust=0.5))
+```
+There are less flights towards the end of the year. 
+```{r}
+UAdaily %>% 
+  filter(wday=="Sat") %>% 
+  ggplot(aes(date,n))+geom_point()+geom_line()+scale_x_date(NULL,date_breaks = "1 month",date_labels = "%b")+ggtitle("Flight Distributions over the Course of the Year")+
+  theme(plot.title=element_text(hjust=0.5))
+
+```
+
