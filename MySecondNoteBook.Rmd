@@ -1,0 +1,72 @@
+
+```{r}
+silence<-suppressWarnings
+silence(library(tidyverse))
+silence(library(reshape2))
+silence(library(GGally))
+silence(library(modelr))
+silence(library(forcats))
+silence(library(hexbin))
+```
+In this notebook, I'll do some practice. Take note of the difference between NA and NULL.
+```{r}
+gapminder %>%
+  group_by(continent) %>%
+  filter(!continent=="Oceania") %>% 
+  ggplot(aes(year, lifeExp, fill = continent)) +
+  geom_bar(stat = "identity", position = position_identity()) +
+  labs(title = "Variation of Life Expectancy over the Years") + theme(
+  plot.title = element_text(hjust = 0.5),
+  panel.grid = element_blank(),
+  panel.background = element_blank(),
+  panel.border=element_rect(fill=NA)
+  )
+  
+```
+We notice a rather ambiguous trend in Africa. We'll focus on Africa. There has however been an increase in gdp over the years. So how do we explain the life Expectancy?
+```{r}
+     gapminder %>% 
+     filter(country=="Nigeria") %>% 
+     mutate(gdp=gdpPercap*pop) %>% 
+   ggplot(aes(year,gdp))+geom_point()
+          
+
+      
+```
+There clearly is a steady increase in gdp in Nigeria. How has this correlated with lifeExp?
+```{r}
+  Nigeria<-gapminder %>% 
+            mutate(gdp=gdpPercap*pop) %>% 
+          filter(country=="Nigeria")
+ gapminder %>% 
+            mutate(gdp=gdpPercap*pop) %>% 
+          filter(country=="Nigeria") %>% 
+         ggplot(aes(year,lifeExp))+geom_point()
+  
+        
+           
+         
+     
+
+```
+The general trend is an increase in gdp correlating to an increase in lifeExp except between 1980 and 2000. We attempt to model lifeExp and gdp.
+```{r}
+    fitNigeria<-lm(lifeExp~gdp,data=Nigeria)
+   summary(fitNigeria)
+```
+
+
+The summary statistics of our model suggest a correlation between lifeExp and gdp. We proceed to apply the model.
+```{r}
+  Nigeriagrid<-Nigeria %>%
+               data_grid(gdp) %>% 
+              add_predictions(fitNigeria,"lifeExp")
+  ggplot(Nigeria,aes(gdp,lifeExp))+geom_point()+geom_smooth(data=fitNigeria,colour="red")
+```
+Let's examine how much our model differs from the original dataset.
+```{r}
+ Nigeria<-Nigeria %>% 
+         add_residuals(fitNigeria,"resid")
+ggplot(Nigeria,aes(year,resid,colour=gdp))+geom_point()
+```
+A good model should have the residuals randomly distributed around zero. Does our model appear to be fit enough? Seems not to be a good model.
