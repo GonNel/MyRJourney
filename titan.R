@@ -34,6 +34,9 @@ anyNA(train)
 train1<-createDataPartition(train$Survived,p=0.8,list=F)
 validate<-train[-train1,]
 train1<-train[train1,]
+#Examination of levels of Embarked shows a difference. Aim to make levels unifrom
+levels(train1$Embarked)
+
 #Set metric and control
 control<-trainControl(method="cv",number=10)
 metric<-"Accuracy"
@@ -59,6 +62,8 @@ preprocm<-preProcess(train1,method=c("knnImpute"))
 fit.knn_imp<-predict(preprocm,train1)
 #Try on test data
 test<-read.csv("test.csv")
+#change levels
+levels(test$Embarked)<-c("","C","Q","S")
 head(test)
 str(test)
 test<-test %>% 
@@ -68,15 +73,18 @@ test<-test %>%
 levels(test$AgeGroup)<-c("Young","Mid Age","Aged","NA")
 levels(test$Sex)<-c("F","M")
 #predict on test data
-predictedtest<-predict(fit.rf,test)
+predictedtest<-predict(fit.cart,test,na.action=na.pass)
  #Check variable  importance
 varImp(fit.rf)
 #Preprocess
 test_imp<-preProcess(test,method="knnImpute")
 test1<-predict(test_imp,test)
 predict(fit.rf,test1)
-#Preprocessing failed for now. Will return to it later. 
-test %>% 
-  na.omit() %>% 
-  mutate(Survived=predictedtest)
+#Save results in a given dataframe 
+Survival<-test%>% 
+  mutate(Survived=predictedtest) %>% 
+  select(PassengerId,Survived)
+#Write 
+write.csv(Survival,file="Submission.csv",row.names = F)
+
 
