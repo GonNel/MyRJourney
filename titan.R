@@ -15,21 +15,31 @@ anyNA(train$AgeGroup)
 #Change levels
 levels(train$AgeGroup)<-c("Young","Mid Age","Aged")
 levels(train$Sex)<-c("F","M")
-#Select only complete cases
-train<-train[complete.cases(train),]
+#Impute median
+train_1<-preProcess(train,method="medianImpute")
+train_imp<-predict(train_1,train)
+#checkNAs
+anyNA(train_imp)
+#find NAs
+train_imp %>% 
+  select_if(is.numeric) %>% 
+  map_lgl(~anyNA(.x))
+#redo levels
+train_imp<-train_imp %>% 
+  mutate(AgeGroup=as.factor(findInterval(Age,c(0,18,35,100))))
+levels(train_imp$AgeGroup)<-c("Young","Mid Age","Aged")
 #Let's visualise survival by Age Group
-train2 %>% 
+train_imp %>% 
    ggplot(aes(Survived,fill=Sex))+geom_histogram(stat="count")+facet_wrap(AgeGroup~Pclass)+
   ggtitle("Survival by class,Agegroup and Gender")+theme(plot.title=element_text(hjust=0.5)) 
 #The graph does suggest that being of mid Age and embarking in the third class made you more likely to die
 #Overall more women than men survived.
 #Partition our data into a training and test dataset
-#Missing values
-anyNA(train)
+
 #Create partition
-train1<-createDataPartition(train$Survived,p=0.8,list=F)
-validate<-train[-train1,]
-train1<-train[train1,]
+train1<-createDataPartition(train_imp$Survived,p=0.8,list=F)
+validate<-train_imp[-train1,]
+train1<-train_imp[train1,]
 #Set metric and control
 control<-trainControl(method="cv",number = 10)
 metric<-"Accuracy"
@@ -79,5 +89,5 @@ Survival<-test2_imp%>%
 #find the confusion matrix
 confusionMatrix(predictedtest,Survival$Survived)
 #Write file
-write.csv(Survival,"Submission13.csv",row.names = F)
+write.csv(Survival,"Submission15.csv",row.names = F)
 
