@@ -2,6 +2,7 @@
 nomsg<-suppressMessages
 nomsg(library(tidyverse))
 nomsg(library(caret))
+nomsg(library(mice))
 library(RANN)
 train<-read.csv("train.csv")
 train<-as.tibble(train)
@@ -16,8 +17,8 @@ anyNA(train$AgeGroup)
 levels(train$AgeGroup)<-c("Young","Mid Age","Aged")
 levels(train$Sex)<-c("F","M")
 #Impute median
-train_1<-preProcess(train,method="medianImpute")
-train_imp<-predict(train_1,train)
+train_1<-mice(train,m=3,method="cart",printFlag = F)
+train_imp<-complete(train_1)
 #checkNAs
 anyNA(train_imp)
 #find NAs
@@ -41,7 +42,7 @@ train1<-createDataPartition(train_imp$Survived,p=0.8,list=F)
 validate<-train_imp[-train1,]
 train1<-train_imp[train1,]
 #Set metric and control
-control<-trainControl(method="cv",number = 10)
+control<-trainControl(method="repeatedcv",number = 10,repeats = 3)
 metric<-"Accuracy"
 #Set up models
 set.seed(233)
@@ -54,10 +55,12 @@ set.seed(233)
 fit.rf<-train(Survived~.,data=train1,method="rf",trControl=control,metric=metric)
 set.seed(233)
 fit.nb<-train(Survived~.,data=train1,method="nb",trControl=control,metric=metric)
-result<-resamples(list(knn=fit.knn,svm=fit.svm,cart=fit.cart,rf=fit.rf,nb=fit.nb))
+#Try Gradiet Boosting
+fit.gbm<-train(Survived~.,data=train1,method="gbm",trControl=control,metric=metric,verbose=F)
+result<-resamples(list(knn=fit.knn,svm=fit.svm,cart=fit.cart,rf=fit.rf,nb=fit.nb,gbm=fit.gbm))
 dotplot(result)
 #Validate 
-predicted<-predict(fit.svm,validate)
+predicted<-predict(fit.rf,validate)
 confusionMatrix(predicted,validate$Survived)
 #Try on test data
 test<-read.csv("test.csv")
@@ -77,17 +80,14 @@ levels(test$Sex)<-c("F","M")
      mutate(AgeGroup=as.factor(findInterval(Age,c(0,18,35,100))))
    #.....
    levels(test2_imp$AgeGroup)=c("Young","Mid Age","Aged")
-predictedtest<-predict(fit.svm,test2_imp,na.action=na.pass)
+predictedtest<-predict(fit.rf,test2_imp,na.action=na.pass)
  #Check variable  importance
-varImp(fit.cart)
+varImp(fit.rf)
 #Set column
 Survival<-test2_imp%>% 
   mutate(Survived=predictedtest) %>% 
   select(PassengerId,Survived)
-
-
 #find the confusion matrix
 confusionMatrix(predictedtest,Survival$Survived)
-#Write file
-write.csv(Survival,"Submission15.csv",row.names = F)
+#Using xgboost
 
