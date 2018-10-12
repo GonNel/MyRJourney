@@ -4,6 +4,7 @@ nomsg(library(caretEnsemble))
 nomsg(library(caret))
 nomsg(library(RANN))
 nomsg(library(mice))
+nomsg(library(DiagrammeR))
 #Start working on data cleaning
 training<-read.csv("train.csv")
 training<-as.tibble(training)
@@ -54,18 +55,23 @@ levels(newtrain$GarageYrBlt)
    sort(decreasing = T)
  #Great, There is no more missing data
 #Train
-trainme<-createDataPartition(newtrain11$SalePrice,p=0.8,list=F)
+trainme<-createDataPartition(newtrain11$SalePrice,p=0.85,list=F)
 validateme<-newtrain11[-trainme,]
 trainme<-newtrain11[trainme,]
-control<-trainControl(method ="cv",number=10)
+control<-trainControl(method ="repeatedcv",number=10,repeats = 5)
 metric<-"RMSE"
 set.seed(233)
 fit.svm<-train(SalePrice~.,data=trainme,method="svmRadial",trControl=control,metric=metric)
 fit.knn<-train(SalePrice~.,data=trainme,method="knn",trControl=control,metric=metric)
-fit.gbm<-train(SalePrice~.,data=trainme,method="gbm",trControl=control,metric=metric)
+fit.gbm<-train(SalePrice~.,data=trainme,method="gbm",trControl=control,metric=metric,
+               verbose=F)
+fit.xgb<-train(SalePrice~.,data=trainme,method="xgbTree",trControl=control,metric=metric)
 #.....
-result<-resamples(list(svm=fit.svm,knn=fit.knn,gbm=fit.gbm))
+result<-resamples(list(svm=fit.svm,knn=fit.knn,gbm=fit.gbm,xgb=fit.xgb))
 dotplot(result)
+
+#visualise xgbTree models
+xgboost::xgb.plot.tree(model = fit.xgb$finalModel)
 #Predict on validation set
 predval<-predict(fit.gbm,validateme)
 #Load test data
@@ -94,7 +100,7 @@ set.seed(233)
 exclude<-c("GarageYrBlt","MasVnrArea","Alley")
 include<-setdiff(names(testing),exclude)
 set.seed(233)
-newtest1<-testing[include1]
+newtest1<-testing[include]
 #Impute missing data
 newtest_imp<-mice(testing,m=3,method = "cart",printFlag = F)
 newtest11<-complete(newtest_imp)
@@ -103,10 +109,10 @@ newtest11 %>%
   map_dbl(~sum(is.na(.x))) %>% 
   sort(decreasing = T)
 #Predict as we have 2 more missing values. replace these with 0
-predictedme<-predict(fit.gbm,newtest11,na.action = na.pass)
+predictedme<-predict(fit.xgb,newtest11,na.action = na.pass)
 resultme<-newtest11 %>% 
   mutate(SalePrice=predictedme) %>% 
   mutate_all(funs(replace(.,is.na(.),0))) %>% 
   select(Id,SalePrice)
 
-write.csv(resultme,"mysubm.csv",row.names = F)
+write.csv(resultme,"mysubmit2.csv",row.names = F)
