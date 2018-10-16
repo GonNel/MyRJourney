@@ -47,4 +47,40 @@ It's highly appreciated!"
       scale_color_manual(values=c("steelblue4","springgreen4","tomato4"))
             
   })
+  output$predictme<-renderPlot({
+    library(tidyverse)
+    library(modelr)
+    
+    
+    mymodel<-lm(Petal.Length~Sepal.Length,data=iris)
+    myirisgrid<-expand.grid(Sepal.Length=c(0,7.5))
+    mypredictions<-predict(mymodel,myirisgrid)
+    
+    grid<-iris %>% 
+      data_grid(Sepal.Length) %>% 
+      mutate(pred=predict(mymodel,newdata=.))
+    iris %>% 
+      ggplot(aes(Sepal.Length,Petal.Length,col=Species))+geom_point()+
+      geom_smooth(method="lm",se=F)+
+      ggtitle("Predicted Petal Length based on Sepal Length")+
+      labs(caption="Predictions based on a linear model")+
+      theme(plot.title = element_text(hjust = 0.5,size=19))+
+      scale_color_manual(values=c("firebrick4","orange","steelblue4"))
+  })
+  output$corrplot<-renderPlot({
+    library(tidyverse)
+    library(modelr)
+    library(GGally)
+    
+    
+    mymodel<-lm(Petal.Length~Sepal.Length,data=iris)
+    myirisgrid<-expand.grid(Sepal.Length=c(0,7.5))
+    mypredictions<-predict(mymodel,myirisgrid)
+    
+    grid<-iris %>% 
+      data_grid(Sepal.Length) %>% 
+      mutate(pred=predict(mymodel,newdata=.))
+    iris %>% 
+      ggpairs(columns = c("Petal.Length","Sepal.Length"),aes(color=Species))
+  })
 })

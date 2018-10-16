@@ -78,7 +78,9 @@ shinyUI(fluidPage(
       textOutput("Thanks"),
      tabsetPanel(type="tabs",
                  tabPanel("Histogram",plotOutput("irisplot")),
-      tabPanel("Scatter",plotOutput("irscatter"))
+      tabPanel("Scatter",plotOutput("irscatter")),
+      tabPanel("Predictions",plotOutput("predictme")),
+      tabPanel("Correlation Plot",plotOutput("corrplot"))
       )
      
     )
