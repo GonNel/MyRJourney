@@ -5,13 +5,17 @@ nomsg(library(caret))
 nomsg(library(RANN))
 nomsg(library(mice))
 nomsg(library(DiagrammeR))
+nomsg(library(Amelia))
 #Start working on data cleaning
 training<-read.csv("train.csv")
 training<-as.tibble(training)
 #Find missing data
-training %>% 
+View(training %>% 
   map_dbl(~sum(is.na(.x))) %>% 
-  sort(decreasing = T)
+  sort(decreasing = T))
+#Missing
+missmap(training,col=c("indianred","steelblue4"),main="Who's Missing out?!",
+        y.cex=0.2,x.cex=0.3)
 #Change levelsof all categorical data in this crude way. NA is not missing data
 newtrain<-training %>% 
  mutate(GarageType=fct_explicit_na(GarageType,na_level = "No"),
@@ -55,10 +59,10 @@ levels(newtrain$GarageYrBlt)
    sort(decreasing = T)
  #Great, There is no more missing data
 #Train
-trainme<-createDataPartition(newtrain11$SalePrice,p=0.85,list=F)
+trainme<-createDataPartition(newtrain11$SalePrice,p=0.8,list=F)
 validateme<-newtrain11[-trainme,]
 trainme<-newtrain11[trainme,]
-control<-trainControl(method ="repeatedcv",number=10,repeats = 5)
+control<-trainControl(method ="cv",number=10)
 metric<-"RMSE"
 set.seed(233)
 fit.svm<-train(SalePrice~.,data=trainme,method="svmRadial",trControl=control,metric=metric)
@@ -66,12 +70,28 @@ fit.knn<-train(SalePrice~.,data=trainme,method="knn",trControl=control,metric=me
 fit.gbm<-train(SalePrice~.,data=trainme,method="gbm",trControl=control,metric=metric,
                verbose=F)
 fit.xgb<-train(SalePrice~.,data=trainme,method="xgbTree",trControl=control,metric=metric)
-#.....
-result<-resamples(list(svm=fit.svm,knn=fit.knn,gbm=fit.gbm,xgb=fit.xgb))
-dotplot(result)
+set.seed(233)
+fit.rf<-train(SalePrice~.,data=trainme,method="rf",trControl=control,metric=metric)
 
-#visualise xgbTree models
-xgboost::xgb.plot.tree(model = fit.xgb$finalModel)
+#.....
+result<-resamples(list(svm=fit.svm,knn=fit.knn,gbm=fit.gbm,rf=fit.rf,xgb=fit.xgb))
+dotplot(result)
+print(fit.gbm)#0.88
+print(fit.rf)#0.87
+print(fit.xgb)#0.86
+#Tuning the GBM model
+gbmgrid<-expand.grid(
+  n.trees=1000,
+  interaction.depth=18,
+  shrinkage=0.03,#Smaller more trees,
+  n.minobsinnode=3#Higher values faster imputation
+)
+#Modified model test
+fit.gbm_mod<-train(SalePrice~.,data=trainme,method="gbm",
+                   trControl=control,metric=metric,
+               verbose=F,tuneGrid=gbmgrid)
+print(fit.gbm_mod)
+
 #Predict on validation set
 predval<-predict(fit.gbm,validateme)
 #Load test data
@@ -102,17 +122,22 @@ include<-setdiff(names(testing),exclude)
 set.seed(233)
 newtest1<-testing[include]
 #Impute missing data
-newtest_imp<-mice(testing,m=3,method = "cart",printFlag = F)
+newtest_imp<-mice(testing,m=1,method = "cart",printFlag = F)
 newtest11<-complete(newtest_imp)
 #Check for missing values 
-newtest11 %>% 
+View(newtest11 %>% 
   map_dbl(~sum(is.na(.x))) %>% 
-  sort(decreasing = T)
+  sort(decreasing = T))
+#View the NA
+
 #Predict as we have 2 more missing values. replace these with 0
-predictedme<-predict(fit.xgb,newtest11,na.action = na.pass)
+predictedme<-predict(fit.gbm_mod,newtest11,na.action = na.pass)
 resultme<-newtest11 %>% 
   mutate(SalePrice=predictedme) %>% 
-  mutate_all(funs(replace(.,is.na(.),0))) %>% 
+  mutate_all(funs(replace(.,is.na(.),mean(.)))) %>% 
   select(Id,SalePrice)
+anyNA(resultme)
 
 write.csv(resultme,"mysubmit2.csv",row.names = F)
+
+
